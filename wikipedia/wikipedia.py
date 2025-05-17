@@ -52,13 +52,6 @@ def set_user_agent(user_agent_string):
     USER_AGENT = user_agent_string
 
 
-def get_bs4_parser():
-    """
-    Get BeautifulSoup parser
-    """
-    return BeautifulSoup("html.parser")
-
-
 def set_rate_limiting(rate_limit, min_wait=timedelta(milliseconds=50)):
     """
     Enable or disable rate limiting on requests to the Mediawiki servers.
@@ -411,8 +404,7 @@ class WikipediaPage(object):
             request = _wiki_request(query_params)
             html = request["query"]["pages"][pageid]["revisions"][0]["*"]
 
-            parser = get_bs4_parser()
-            lis = parser(html).find_all("li")
+            lis = BeautifulSoup(html).find_all("li")
             filtered_lis = [
                 li for li in lis if not "tocsection" in "".join(li.get("class", []))
             ]

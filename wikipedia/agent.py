@@ -14,15 +14,12 @@ from .util import cache, stdout_encode, debug
 
 class WikipediaAgent:
 
-    def __init__(self, api_url=API_URL, user_agent=USER_AGENT, lang=None, parser=None):
+    def __init__(self, api_url=API_URL, user_agent=USER_AGENT, lang=None, parser_args=None):
         self.user_agent = user_agent
         self.api_url = api_url
         if lang:
             self.api_url = "https://" + lang.lower() + ".wikipedia.org/w/api.php"
-        if parser:
-            self.parser = parser
-        else:
-            parser = BeautifulSoup("html.parser")
+        self.parser_args = parser_args
         return
 
     def set_rate_limiting(
