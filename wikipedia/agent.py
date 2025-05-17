@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
+import requests
 
 from .wikipedia import (
     API_URL,
@@ -8,18 +9,22 @@ from .wikipedia import (
     RATE_LIMIT_MIN_WAIT,
     RATE_LIMIT_LAST_CALL,
     USER_AGENT,
-    WikipediaPage
+    WikipediaPage,
 )
 from .util import cache, stdout_encode, debug
 
+
 class WikipediaAgent:
 
-    def __init__(self, api_url=API_URL, user_agent=USER_AGENT, lang=None, parser_args=None):
+    def __init__(
+        self, api_url=API_URL, user_agent=USER_AGENT, lang=None, parser_args=None
+    ):
         self.user_agent = user_agent
         self.api_url = api_url
         if lang:
             self.api_url = "https://" + lang.lower() + ".wikipedia.org/w/api.php"
         self.parser_args = parser_args
+        self.set_rate_limiting()
         return
 
     def set_rate_limiting(
@@ -72,7 +77,7 @@ class WikipediaAgent:
         if suggestion:
             search_params["srinfo"] = "suggestion"
 
-        raw_results = _wiki_request(search_params)
+        raw_results = self._wiki_request(search_params)
 
         if "error" in raw_results:
             if raw_results["error"]["info"] in (
@@ -95,7 +100,7 @@ class WikipediaAgent:
                 return list(search_results), None
 
         return list(search_results)
-        
+
     @cache
     def geosearch(self, latitude, longitude, title=None, results=10, radius=1000):
         """
@@ -123,7 +128,7 @@ class WikipediaAgent:
         if title:
             search_params["titles"] = title
 
-        raw_results = _wiki_request(search_params)
+        raw_results = self._wiki_request(search_params)
 
         if "error" in raw_results:
             if raw_results["error"]["info"] in (
@@ -142,7 +147,6 @@ class WikipediaAgent:
 
         return list(search_results)
 
-
     @cache
     def suggest(self, query):
         """
@@ -157,13 +161,12 @@ class WikipediaAgent:
         }
         search_params["srsearch"] = query
 
-        raw_result = _wiki_request(search_params)
+        raw_result = self._wiki_request(search_params)
 
         if raw_result["query"].get("searchinfo"):
             return raw_result["query"]["searchinfo"]["suggestion"]
 
         return None
-
 
     def random(self, pages=1):
         """
@@ -182,14 +185,13 @@ class WikipediaAgent:
             "rnlimit": pages,
         }
 
-        request = _wiki_request(query_params)
+        request = self._wiki_request(query_params)
         titles = [page["title"] for page in request["query"]["random"]]
 
         if len(titles) == 1:
             return titles[0]
 
         return titles
-
 
     @cache
     def summary(self, title, sentences=0, chars=0, auto_suggest=True, redirect=True):
@@ -221,13 +223,14 @@ class WikipediaAgent:
         else:
             query_params["exintro"] = ""
 
-        request = _wiki_request(query_params)
+        request = self._wiki_request(query_params)
         summary = request["query"]["pages"][pageid]["extract"]
 
         return summary
 
-
-    def page(self, title=None, pageid=None, auto_suggest=True, redirect=True, preload=False):
+    def page(
+        self, title=None, pageid=None, auto_suggest=True, redirect=True, preload=False
+    ):
         """
         Get a WikipediaPage object for the page with title `title` or the pageid
         `pageid` (mutually exclusive).
@@ -254,3 +257,35 @@ class WikipediaAgent:
             return WikipediaPage(pageid=pageid, preload=preload)
         else:
             raise ValueError("Either a title or a pageid must be specified")
+
+    def _wiki_request(self, params):
+        """
+        Make a request to the Wikipedia API using the given search parameters.
+        Returns a parsed dict of the JSON response.
+        """
+        params["format"] = "json"
+        if not "action" in params:
+            params["action"] = "query"
+
+        headers = {"User-Agent": self.user_agent}
+
+        if (
+            self.rate_limit
+            and self.rate_limit_last_call
+            and self.rate_limit_last_call + self.rate_limit_min_wait > datetime.now()
+        ):
+
+            # it hasn't been long enough since the last API call
+            # so wait until we're in the clear to make the request
+
+            wait_time = (
+                self.rate_limit_last_call + self.rate_limit_min_wait
+            ) - datetime.now()
+            time.sleep(int(wait_time.total_seconds()))
+
+        r = requests.get(self.api_url, params=params, headers=headers)
+
+        if self.rate_limit:
+            self.rate_limit_last_call = datetime.now()
+
+        return r.json()
