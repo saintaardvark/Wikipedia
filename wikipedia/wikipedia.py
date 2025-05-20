@@ -5,6 +5,7 @@ import time
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from decimal import Decimal
+from loguru import logger
 
 from .exceptions import (
     PageError,
@@ -299,6 +300,7 @@ class WikipediaPage(object):
     def __init__(
         self, title=None, pageid=None, redirect=True, preload=False, original_title=""
     ):
+        logger.debug("Initializing WikipediaPage")
         if title is not None:
             self.title = title
             self.original_title = original_title or title
@@ -307,6 +309,7 @@ class WikipediaPage(object):
         else:
             raise ValueError("Either a title or a pageid must be specified")
 
+        logger.debug("About to call self.__load")
         self.__load(redirect=redirect, preload=preload)
 
         if preload:
@@ -340,6 +343,7 @@ class WikipediaPage(object):
 
         Does not need to be called manually, should be called automatically during __init__.
         """
+        logger.debug("Here I am in __load")
         query_params = {
             "prop": "info|pageprops",
             "inprop": "url",
